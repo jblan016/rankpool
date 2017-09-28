@@ -13,7 +13,7 @@ the terms of the BSD license (see the COPYING file).
 
 #include "bits/mexutils.h"
 #include "bits/datamex.hpp"
-#include "bits/nnpooling.hpp"
+#include "bits/nnsorting.hpp"
 
 #if ENABLE_GPU
 #include "bits/datacu.hpp"
