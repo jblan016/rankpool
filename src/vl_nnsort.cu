@@ -37,8 +37,6 @@ VLMXOption  options [] = {
   {"Pad",              1,   opt_pad               },
   {"Method",           1,   opt_method            },
   {"Verbose",          0,   opt_verbose           },
-  {"CUDNN",            0,   opt_cudnn             },
-  {"NoCUDNN",          0,   opt_no_cudnn          },
   {0,                  0,   0                     }
 } ;
 
@@ -164,22 +162,13 @@ void mexFunction(int nout, mxArray *out[],
         }
         break;
 
-      case opt_no_cudnn :
-#if ENABLE_CUDNN
-        context.getCudaHelper().setCudnnEnabled(false) ;
-#endif
-        break ;
-
-      case opt_cudnn :
-#if ENABLE_CUDNN
-        context.getCudaHelper().setCudnnEnabled(true) ;
-#endif
-        break ;
-
       default:
         break ;
     }
   }
+#if ENABLE_CUDNN
+        context.getCudaHelper().setCudnnEnabled(false) ;
+#endif
 
   vl::MexTensor data(context) ;
   vl::MexTensor derOutput(context) ;
