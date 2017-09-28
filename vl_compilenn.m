@@ -209,6 +209,8 @@ mex_src{end+1} = fullfile(root,'matlab','src',['vl_nnnormalize.' ext]) ;
 mex_src{end+1} = fullfile(root,'matlab','src',['vl_nnbnorm.' ext]) ;
 mex_src{end+1} = fullfile(root,'matlab','src',['vl_nnbilinearsampler.' ext]) ;
 mex_src{end+1} = fullfile(root,'matlab','src',['vl_taccummex.' ext]) ;
+lib_src{end+1} = fullfile(root,'matlab','src','bits',['nnsorting.' ext]) ;
+mex_src{end+1} = fullfile(root,'matlab','src',['vl_nnsort.' ext]) ;
 switch arch
   case {'glnxa64','maci64'}
     % not yet supported in windows
@@ -225,6 +227,7 @@ lib_src{end+1} = fullfile(root,'matlab','src','bits','impl','bnorm_cpu.cpp') ;
 lib_src{end+1} = fullfile(root,'matlab','src','bits','impl','tinythread.cpp') ;
 lib_src{end+1} = fullfile(root,'matlab','src','bits','impl','bilinearsampler_cpu.cpp') ;
 lib_src{end+1} = fullfile(root,'matlab','src','bits','imread.cpp') ;
+lib_src{end+1} = fullfile(root,'matlab','src','bits','impl','sorting_cpu.cpp') ;
 
 % GPU-specific files
 if opts.enableGpu
@@ -236,6 +239,7 @@ if opts.enableGpu
   lib_src{end+1} = fullfile(root,'matlab','src','bits','impl','bnorm_gpu.cu') ;
   lib_src{end+1} = fullfile(root,'matlab','src','bits','impl','bilinearsampler_gpu.cu') ;
   lib_src{end+1} = fullfile(root,'matlab','src','bits','datacu.cu') ;
+  lib_src{end+1} = fullfile(root,'matlab','src','bits','impl','sorting_gpu.cu') ;
   mex_src{end+1} = fullfile(root,'matlab','src','vl_cudatool.cu') ;
 end
 
@@ -246,6 +250,7 @@ if opts.enableCudnn
   lib_src{end+1} = fullfile(root,'matlab','src','bits','impl','nnpooling_cudnn.cu') ;
   lib_src{end+1} = fullfile(root,'matlab','src','bits','impl','nnbilinearsampler_cudnn.cu') ;
   lib_src{end+1} = fullfile(root,'matlab','src','bits','impl','nnbnorm_cudnn.cu') ;
+  lib_src{end+1} = fullfile(root,'matlab','src','bits','impl','nnsorting_cudnn.cu') ;
 end
 
 % Other files
