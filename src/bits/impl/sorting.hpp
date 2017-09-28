@@ -1,8 +1,9 @@
-// @file pooling.hpp
-// @brief Pooling block implementation
+// @file sorting.hpp
+// @brief Sorting block implementation
 // @author Andrea Vedaldi
 // @author Karel Lenc
 
+//mod j.b.<2017>
 /*
 Copyright (C) 2014-16 Andrea Vedaldi and Karel Lenc.
 All rights reserved.
@@ -11,8 +12,8 @@ This file is part of the VLFeat library and is made available under
 the terms of the BSD license (see the COPYING file).
 */
 
-#ifndef VL_POOLING_H
-#define VL_POOLING_H
+#ifndef VL_SORTING_H
+#define VL_SORTING_H
 
 #include "../data.hpp"
 #include <cstddef>

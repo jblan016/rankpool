@@ -1,6 +1,7 @@
-// @file nnpooling.cu
-// @brief Pooling block
+// @file nnsorting.cu
+// @brief Sorting block
 // @author Andrea Vedaldi
+// @author Jonathan Blanchette 2017
 
 /*
 Copyright (C) 2014-16 Andrea Vedaldi and Karel Lenc.
@@ -10,15 +11,15 @@ This file is part of the VLFeat library and is made available under
 the terms of the BSD license (see the COPYING file).
 */
 
-#include "nnpooling.hpp"
-#include "impl/pooling.hpp"
+#include "nnsorting.hpp"
+#include "impl/sorting.hpp"
 
 #if ENABLE_GPU
 #include "datacu.hpp"
 #endif
 
 #if ENABLE_CUDNN
-#include "impl/nnpooling_cudnn.hpp"
+#include "impl/nnsorting_cudnn.hpp"
 #endif
 
 #include <assert.h>

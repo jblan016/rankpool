@@ -1,8 +1,9 @@
-// @file pooling_gpu.cu
-// @brief Pooling block implementation (GPU)
+// @file sorting_gpu.cu
+// @brief Sorting block implementation (GPU)
 // @author Andrea Vedaldi
 // @author Karel Lenc
 
+//mod. by j.b.<2017>
 /*
 Copyright (C) 2014-16 Andrea Vedaldi and Karel Lenc.
 All rights reserved.
@@ -11,7 +12,7 @@ This file is part of the VLFeat library and is made available under
 the terms of the BSD license (see the COPYING file).
 */
 
-#include "pooling.hpp"
+#include "sorting.hpp"
 #include "../datacu.hpp"
 #include <assert.h>
 #include <float.h>
