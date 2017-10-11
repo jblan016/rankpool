@@ -1,7 +1,8 @@
-// @file vl_nnpool.cu
-// @brief Pooling block MEX wrapper
+// @file vl_nnsort.cu
+// @brief Sorting block MEX wrapper
 // @author Andrea Vedaldi
 // @author Karel Lenc
+//modded by j.b.<2017>
 
 /*
 Copyright (C) 2014-15 Andrea Vedaldi and Karel Lenc.
@@ -26,9 +27,7 @@ enum {
   opt_stride = 0,
   opt_pad,
   opt_method,
-  opt_verbose,
-  opt_cudnn,
-  opt_no_cudnn,
+  opt_verbose
 } ;
 
 /* options */
@@ -70,15 +69,15 @@ enum {
 void mexFunction(int nout, mxArray *out[],
                  int nin, mxArray const *in[])
 {
-  int poolWidth ;
-  int poolHeight ;
+  int sortWidth ;
+  int sortHeight ;
   int strideX = 1 ;
   int strideY = 1 ;
   int padLeft = 0 ;
   int padRight = 0 ;
   int padTop = 0 ;
   int padBottom = 0 ;
-  vl::PoolingMethod method = vl::vlPoolingMax ;
+  vl::SortingMethod method = vl::vlSortingMax ;
   bool backMode = false ;
 
   int verbosity = 0 ;
@@ -154,9 +153,9 @@ void mexFunction(int nout, mxArray *out[],
            vlmxError(VLMXE_IllegalArgument, "METHOD is not a string.") ;
         }
         if (vlmxIsEqualToStringI(optarg, "max")) {
-          method = vl::vlPoolingMax ;
+          method = vl::vlSortingMax ;
         } else if (vlmxIsEqualToStringI(optarg, "avg")) {
-          method = vl::vlPoolingAverage ;
+          method = vl::vlSortingAverage ;
         } else {
           vlmxError(VLMXE_IllegalArgument, "METHOD is not a supported method.") ;
         }
@@ -190,12 +189,12 @@ void mexFunction(int nout, mxArray *out[],
   }
   switch (mxGetNumberOfElements(in[IN_SIZE])) {
     case 1:
-      poolHeight = mxGetPr(in[IN_SIZE])[0] ;
-      poolWidth = poolHeight ;
+      sortHeight = mxGetPr(in[IN_SIZE])[0] ;
+      sortWidth = sortHeight ;
       break ;
     case 2:
-      poolHeight = mxGetPr(in[IN_SIZE])[0] ;
-      poolWidth = mxGetPr(in[IN_SIZE])[1] ;
+      sortHeight = mxGetPr(in[IN_SIZE])[0] ;
+      sortWidth = mxGetPr(in[IN_SIZE])[1] ;
       break ;
     default:
       mexErrMsgTxt("SIZE has neither one nor two elements.") ;
@@ -205,12 +204,12 @@ void mexFunction(int nout, mxArray *out[],
   if (strideX < 1 || strideY < 1) {
     mexErrMsgTxt("At least one element of STRIDE is smaller than one.") ;
   }
-  if (poolHeight == 0 || poolWidth == 0) {
-    mexErrMsgTxt("A dimension of the pooling SIZE is void.") ;
+  if (sortHeight == 0 || sortWidth == 0) {
+    mexErrMsgTxt("A dimension of the sorting SIZE is void.") ;
   }
-  if (data.getHeight() + (padTop+padBottom) < poolHeight ||
-      data.getWidth() + (padLeft+padRight) < poolWidth) {
-    mexErrMsgTxt("The pooling window is larger than the DATA (including padding).") ;
+  if (data.getHeight() + (padTop+padBottom) < sortHeight ||
+      data.getWidth() + (padLeft+padRight) < sortWidth) {
+    mexErrMsgTxt("The sorting window is larger than the DATA (including padding).") ;
   }
   if (padLeft < 0 ||
       padRight < 0 ||
@@ -218,21 +217,21 @@ void mexFunction(int nout, mxArray *out[],
       padBottom < 0) {
     mexErrMsgTxt("An element of PAD is negative.") ;
   }
-  if (padLeft >= poolWidth ||
-      padRight >= poolWidth ||
-      padTop >= poolHeight  ||
-      padBottom >= poolHeight) {
-    mexErrMsgTxt("A padding value is larger or equal to the size of the pooling window.") ;
+  if (padLeft >= sortWidth ||
+      padRight >= sortWidth ||
+      padTop >= sortHeight  ||
+      padBottom >= sortHeight) {
+    mexErrMsgTxt("A padding value is larger or equal to the size of the sorting window.") ;
   }
 
   /* Get the output Shape */
-  vl::TensorShape outputShape((data.getHeight() + (padTop+padBottom) - poolHeight)/strideY + 1,
-                              (data.getWidth()  + (padLeft+padRight) - poolWidth)/strideX + 1,
+  vl::TensorShape outputShape((data.getHeight() + (padTop+padBottom) - sortHeight)/strideY + 1,
+                              (data.getWidth()  + (padLeft+padRight) - sortWidth)/strideX + 1,
                               data.getDepth(),
                               data.getSize()) ;
 
   if (backMode && (derOutput != outputShape)) {
-    mexErrMsgTxt("DEROUTPUT dimensions are incompatible with X and POOL.") ;
+    mexErrMsgTxt("DEROUTPUT dimensions are incompatible with X and SORT.") ;
   }
 
   /* Create output buffers */
@@ -248,7 +247,7 @@ void mexFunction(int nout, mxArray *out[],
   }
 
   if (verbosity > 0) {
-    mexPrintf("vl_nnpool: %s; %s", backMode?"backward":"forward", (data.getDeviceType()==vl::VLDT_GPU) ? "GPU" : "CPU") ;
+    mexPrintf("vl_nnsort: %s; %s", backMode?"backward":"forward", (data.getDeviceType()==vl::VLDT_GPU) ? "GPU" : "CPU") ;
     if (data.getDeviceType() == vl::VLDT_GPU) {
 #if ENABLE_CUDNN
       mexPrintf("; %s\n", context.getCudaHelper().getCudnnEnabled() ? "cuDNN" : "MatConvNet") ;
@@ -258,17 +257,17 @@ void mexFunction(int nout, mxArray *out[],
     } else {
       mexPrintf("; MatConvNet\n") ;
     }
-    mexPrintf("vl_nnpool: stride: [%d %d], pad: [%d %d %d %d]\n",
+    mexPrintf("vl_nnsort: stride: [%d %d], pad: [%d %d %d %d]\n",
               strideY, strideX,
               padTop, padBottom, padLeft, padRight) ;
-    vl::print("vl_nnpool: data: ", data) ;
-    mexPrintf("vl_nnpool: pooling: %d x %d\n", poolHeight, poolWidth);
-    mexPrintf("vl_nnpool: method: %s\n", (method == vl::vlPoolingMax) ? "max" : "avg") ;
+    vl::print("vl_nnsort: data: ", data) ;
+    mexPrintf("vl_nnsort: sorting: %d x %d\n", sortHeight, sortWidth);
+    mexPrintf("vl_nnsort: method: %s\n", (method == vl::vlSortingMax) ? "max" : "avg") ;
     if (backMode) {
-      vl::print("vl_nnpool: derOutput: ", derOutput) ;
-      vl::print("vl_nnpool: derData: ", derData) ;
+      vl::print("vl_nnsort: derOutput: ", derOutput) ;
+      vl::print("vl_nnsort: derData: ", derData) ;
     } else {
-      vl::print("vl_nnpool: output: ", output) ;
+      vl::print("vl_nnsort: output: ", output) ;
     }
   }
 
@@ -278,17 +277,17 @@ void mexFunction(int nout, mxArray *out[],
 
   vl::ErrorCode error ;
   if (!backMode) {
-    error = vl::nnpooling_forward(context,
+    error = vl::nnsorting_forward(context,
                                   output, data,
                                   method,
-                                  poolHeight, poolWidth,
+                                  sortHeight, sortWidth,
                                   strideY, strideX,
                                   padTop, padBottom, padLeft, padRight) ;
   } else {
-    error = vl::nnpooling_backward(context,
+    error = vl::nnsorting_backward(context,
                                    derData, data, derOutput,
                                    method,
-                                   poolHeight, poolWidth,
+                                   sortHeight, sortWidth,
                                    strideY, strideX,
                                    padTop, padBottom, padLeft, padRight) ;
   }
