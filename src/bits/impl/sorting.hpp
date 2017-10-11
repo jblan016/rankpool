@@ -21,14 +21,14 @@ the terms of the BSD license (see the COPYING file).
 namespace vl { namespace impl {
 
   template<vl::DeviceType dev, typename type>
-  struct pooling_max {
+  struct sorting_max {
     typedef type data_type ;
 
     static vl::ErrorCode
     forward(data_type* output,
             data_type const* data,
             size_t height, size_t width, size_t depth,
-            size_t poolHeight, size_t poolWidth,
+            size_t sortHeight, size_t sortWidth,
             size_t strideY, size_t strideX,
             size_t padTop, size_t padBottom, size_t padLeft, size_t padRight) ;
 
@@ -37,20 +37,20 @@ namespace vl { namespace impl {
              data_type const* data,
              data_type const* derOutput,
              size_t height, size_t width, size_t depth,
-             size_t poolHeight, size_t poolWidth,
+             size_t sortHeight, size_t sortWidth,
              size_t strideY, size_t strideX,
              size_t padTop, size_t padBottom, size_t padLeft, size_t padRight) ;
   } ;
 
   template<vl::DeviceType dev, typename type>
-  struct pooling_average {
+  struct sorting_average {
     typedef type data_type ;
 
     static vl::ErrorCode
     forward(data_type* output,
             data_type const* data,
             size_t height, size_t width, size_t depth,
-            size_t poolHeight, size_t poolWidth,
+            size_t sortHeight, size_t sortWidth,
             size_t strideY, size_t strideX,
             size_t padTop, size_t padBottom, size_t padLeft, size_t padRight) ;
 
@@ -58,11 +58,11 @@ namespace vl { namespace impl {
     backward(type* derData,
              type const* derOutput,
              size_t height, size_t width, size_t depth,
-             size_t poolHeight, size_t poolWidth,
+             size_t sortHeight, size_t sortWidth,
              size_t strideY, size_t strideX,
              size_t padTop, size_t padBottom, size_t padLeft, size_t padRight) ;
   } ;
 
 } }
 
-#endif /* defined(VL_POOLING_H) */
+#endif /* defined(VL_SORTSING_H) */

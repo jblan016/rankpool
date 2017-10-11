@@ -18,13 +18,13 @@ the terms of the BSD license (see the COPYING file).
 #include <limits>
 
 /* ---------------------------------------------------------------- */
-/*                                               Max pooling helper */
+/*                                               Max sorting helper */
 /* ---------------------------------------------------------------- */
 
 template <typename type>
 struct acc_max
 {
-  inline acc_max(int poolHeight, int poolWidth, type derOutput = 0)
+  inline acc_max(int sortHeight, int sortWidth, type derOutput = 0)
   :
   value(-std::numeric_limits<type>::infinity()),
   derOutput(derOutput),
@@ -57,16 +57,16 @@ struct acc_max
 } ;
 
 /* ---------------------------------------------------------------- */
-/*                                           Average pooling helper */
+/*                                           Average sorting helper */
 /* ---------------------------------------------------------------- */
 
 template <typename type>
 struct acc_sum
 {
-  inline acc_sum(int poolHeight, int poolWidth, type derOutput = 0)
+  inline acc_sum(int sortHeight, int sortWidth, type derOutput = 0)
   :
   value(0),
-  scale(type(1)/type(poolHeight*poolWidth)),
+  scale(type(1)/type(sortHeight*sortWidth)),
   derOutput(derOutput)
   { }
 
@@ -91,48 +91,48 @@ struct acc_sum
 } ;
 
 /* ---------------------------------------------------------------- */
-/*                                                pooling_*_forward */
+/*                                                sorting_*_forward */
 /* ---------------------------------------------------------------- */
 
 /*
  Reverse accumulation style (better for writing).
  - pick an input coordiante xi; goal is to compute dz/dxi
- - look for all the pools Pj that cointain xi
+ - look for all the sorts Pj that cointain xi
  -  compute dfj/dxi (Pj)
  -  accumulate into dz/dxi += dz/dfj dfj/dxi (Pj)
 
  The advantage of this method is that dz/dxi can be processed in parallel
  without conflicts from other threads writing on different dz/dxi. The
  disadvantage is that for eac xi we need to know dfj/dxi (Pj) for all
- the pools Pj that contain xi. Barring special cases (e.g. linear) this
+ the sorts Pj that contain xi. Barring special cases (e.g. linear) this
  usually requires additional information to be available. For instance,
- for max pooling knowing the output in addition to the input of the
- pooling operator.
+ for max sorting knowing the output in addition to the input of the
+ sorting operator.
 
  Direct accumulation style.
- - pick an output coordiante fj and its pool Pj
- - for all the input point xi in the pool Pj
+ - pick an output coordiante fj and its sort Pj
+ - for all the input point xi in the sort Pj
  - compute dfj/dxi (Pj)
  - accumulate to dz/dxi += dz/dfj dfj/dxi (Pj)
 
- The difference with the last method is that different output pools Pj
+ The difference with the last method is that different output sorts Pj
  will share several input pixels xi; hence this will cause write conflicts if
  Pj are processed in parallel.
  */
 
 template<typename type, typename Accumulator> static inline void
-pooling_forward_cpu(type* pooled,
+sorting_forward_cpu(type* sorted,
                     type const* data,
                     size_t width, size_t height, size_t depth,
                     size_t windowWidth, size_t windowHeight,
                     size_t strideX, size_t strideY,
                     size_t padLeft, size_t padRight, size_t padTop, size_t padBottom)
 {
-  int pooledWidth = (width + (padLeft + padRight) - windowWidth)/strideX + 1 ;
-  int pooledHeight = (height + (padTop + padBottom) - windowHeight)/strideY + 1 ;
+  int sortedWidth = (width + (padLeft + padRight) - windowWidth)/strideX + 1 ;
+  int sortedHeight = (height + (padTop + padBottom) - windowHeight)/strideY + 1 ;
   for (int z = 0; z < depth; ++z) {
-    for (int y = 0; y < pooledHeight; ++y) {
-      for (int x = 0; x < pooledWidth; ++x) {
+    for (int y = 0; y < sortedHeight; ++y) {
+      for (int x = 0; x < sortedWidth; ++x) {
         int x1 = x * (signed)strideX - (signed)padLeft ;
         int y1 = y * (signed)strideY - (signed)padTop ;
         int x2 = std::min(x1 + windowWidth, width) ;
@@ -145,16 +145,16 @@ pooling_forward_cpu(type* pooled,
             acc.accumulate_forward(data[v * width + u]) ;
           }
         }
-        pooled[y * pooledWidth + x] = acc.done_forward() ;
+        sorted[y * sortedWidth + x] = acc.done_forward() ;
       }
     }
     data += width*height ;
-    pooled += pooledWidth*pooledHeight ;
+    sorted += sortedWidth*sortedHeight ;
   }
 }
 
 /* ---------------------------------------------------------------- */
-/*                                               pooling_*_backward */
+/*                                               sorting_*_backward */
 /* ---------------------------------------------------------------- */
 
 /*
@@ -165,7 +165,7 @@ pooling_forward_cpu(type* pooled,
 /* Todo: transpose */
 
 template<typename type, typename Accumulator> static inline void
-pooling_backward_cpu(type* derData,
+sorting_backward_cpu(type* derData,
                      type const* data,
                      type const* derPooled,
                      size_t width, size_t height, size_t depth,
@@ -173,18 +173,18 @@ pooling_backward_cpu(type* derData,
                      size_t strideX, size_t strideY,
                      size_t padLeft, size_t padRight, size_t padTop, size_t padBottom)
 {
-  int pooledWidth = (width + (padLeft + padRight) - windowWidth)/strideX + 1 ;
-  int pooledHeight = (height + (padTop + padBottom) - windowHeight)/strideY + 1 ;
+  int sortedWidth = (width + (padLeft + padRight) - windowWidth)/strideX + 1 ;
+  int sortedHeight = (height + (padTop + padBottom) - windowHeight)/strideY + 1 ;
   for (int z = 0; z < depth; ++z) {
-    for (int y = 0; y < pooledHeight; ++y) {
-      for (int x = 0; x < pooledWidth; ++x) {
+    for (int y = 0; y < sortedHeight; ++y) {
+      for (int x = 0; x < sortedWidth; ++x) {
         int x1 = x * (signed)strideX - (signed)padLeft ;
         int y1 = y * (signed)strideY - (signed)padTop ;
         int x2 = std::min(x1 + windowWidth, width) ;
         int y2 = std::min(y1 + windowHeight, height) ;
         x1 = std::max(x1, 0) ;
         y1 = std::max(y1, 0) ;
-        Accumulator acc(y2 - y1, x2 - x1, derPooled[y * pooledWidth + x]) ;
+        Accumulator acc(y2 - y1, x2 - x1, derPooled[y * sortedWidth + x]) ;
         for (int v = y1 ; v < y2 ; ++v) {
           for (int u = x1 ; u < x2 ; ++u) {
             acc.accumulate_backward(&data[v * width + u],
@@ -196,7 +196,7 @@ pooling_backward_cpu(type* derData,
     }
     data += width*height ;
     derData += width*height ;
-    derPooled += pooledWidth*pooledHeight ;
+    derPooled += sortedWidth*sortedHeight ;
   }
 }
 
@@ -207,20 +207,20 @@ pooling_backward_cpu(type* derData,
 namespace vl { namespace impl {
 
   template <typename type>
-  struct pooling_max<vl::VLDT_CPU, type>
+  struct sorting_max<vl::VLDT_CPU, type>
   {
     static vl::ErrorCode
-    forward(type* pooled,
+    forward(type* sorted,
             type const* data,
             size_t height, size_t width, size_t depth,
-            size_t poolHeight, size_t poolWidth,
+            size_t sortHeight, size_t sortWidth,
             size_t strideY, size_t strideX,
             size_t padTop, size_t padBottom, size_t padLeft, size_t padRight)
     {
-      pooling_forward_cpu<type, acc_max<type> > (pooled,
+      sorting_forward_cpu<type, acc_max<type> > (sorted,
                                                  data,
                                                  height, width, depth,
-                                                 poolHeight, poolWidth,
+                                                 sortHeight, sortWidth,
                                                  strideY, strideX,
                                                  padTop, padBottom, padLeft, padRight) ;
       return VLE_Success ;
@@ -231,37 +231,37 @@ namespace vl { namespace impl {
              type const* data,
              type const* derOutput,
              size_t height, size_t width, size_t depth,
-             size_t poolHeight, size_t poolWidth,
+             size_t sortHeight, size_t sortWidth,
              size_t strideY, size_t strideX,
              size_t padTop, size_t padBottom,
              size_t padLeft, size_t padRight)
     {
-      pooling_backward_cpu<type, acc_max<type> > (derData,
+      sorting_backward_cpu<type, acc_max<type> > (derData,
                                                   data, derOutput,
                                                   height, width, depth,
-                                                  poolHeight, poolWidth,
+                                                  sortHeight, sortWidth,
                                                   strideY, strideX,
                                                   padTop, padBottom, padLeft, padRight) ;
       return VLE_Success ;
     }
-  } ; // pooling_max
+  } ; // sorting_max
 
   template <typename type>
-  struct pooling_average<vl::VLDT_CPU, type>
+  struct sorting_average<vl::VLDT_CPU, type>
   {
 
     static vl::ErrorCode
-    forward(type* pooled,
+    forward(type* sorted,
             type const* data,
             size_t height, size_t width, size_t depth,
-            size_t poolHeight, size_t poolWidth,
+            size_t sortHeight, size_t sortWidth,
             size_t strideY, size_t strideX,
             size_t padTop, size_t padBottom, size_t padLeft, size_t padRight)
     {
-      pooling_forward_cpu<type, acc_sum<type> > (pooled,
+      sorting_forward_cpu<type, acc_sum<type> > (sorted,
                                                  data,
                                                  height, width, depth,
-                                                 poolHeight, poolWidth,
+                                                 sortHeight, sortWidth,
                                                  strideY, strideX,
                                                  padTop, padBottom, padLeft, padRight) ;
       return VLE_Success ;
@@ -271,29 +271,29 @@ namespace vl { namespace impl {
     backward(type* derData,
              type const* derPooled,
              size_t height, size_t width, size_t depth,
-             size_t poolHeight, size_t poolWidth,
+             size_t sortHeight, size_t sortWidth,
              size_t strideY, size_t strideX,
              size_t padTop, size_t padBottom,
              size_t padLeft, size_t padRight)
     {
-      pooling_backward_cpu<type, acc_sum<type> > (derData,
+      sorting_backward_cpu<type, acc_sum<type> > (derData,
                                                   NULL, derPooled,
                                                   height, width, depth,
-                                                  poolHeight, poolWidth,
+                                                  sortHeight, sortWidth,
                                                   strideY, strideX,
                                                   padTop, padBottom, padLeft, padRight) ;
       return VLE_Success ;
     }
-  } ; // pooling_average
+  } ; // sorting_average
 
 } } ; // namespace vl::impl
 
 // Instantiations
-template struct vl::impl::pooling_max<vl::VLDT_CPU, float> ;
-template struct vl::impl::pooling_average<vl::VLDT_CPU, float> ;
+template struct vl::impl::sorting_max<vl::VLDT_CPU, float> ;
+template struct vl::impl::sorting_average<vl::VLDT_CPU, float> ;
 
 #ifdef ENABLE_DOUBLE
-template struct vl::impl::pooling_max<vl::VLDT_CPU, double> ;
-template struct vl::impl::pooling_average<vl::VLDT_CPU, double> ;
+template struct vl::impl::sorting_max<vl::VLDT_CPU, double> ;
+template struct vl::impl::sorting_average<vl::VLDT_CPU, double> ;
 #endif
 

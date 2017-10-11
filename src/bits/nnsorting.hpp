@@ -1,5 +1,5 @@
 // @file nnsorting.hpp
-// @brief Pooling block
+// @brief Sorting block
 // @author Andrea Vedaldi
 
 //modded by Jonathan Blanchette <2017>
@@ -20,13 +20,13 @@ the terms of the BSD license (see the COPYING file).
 
 namespace vl {
 
-  enum PoolingMethod { vlPoolingMax, vlPoolingAverage } ;
+  enum SortingMethod { vlSortingMax, vlSortingAverage } ;
 
   vl::ErrorCode
   nnsorting_forward(vl::Context& context,
                     vl::Tensor output,
                     vl::Tensor data,
-                    PoolingMethod method,
+                    SortingMethod method,
                     int sortHeight, int sortWidth,
                     int strideY, int strideX,
                     int padTop, int padBottom,
@@ -37,7 +37,7 @@ namespace vl {
                      vl::Tensor derData,
                      vl::Tensor data,
                      vl::Tensor derOutput,
-                     PoolingMethod method,
+                     SortingMethod method,
                      int sortHeight, int sortWidth,
                      int strideY, int strideX,
                      int padTop, int padBottom,

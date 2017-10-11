@@ -48,8 +48,8 @@ default: assert(false) ; return VLE_Unknown ; \
 
 #define DISPATCH3(deviceType) \
 switch (method) { \
-case vlPoolingAverage : DISPATCH2(deviceType, sorting_average) ; break ; \
-case vlPoolingMax : DISPATCH2(deviceType, sorting_max) ; break ; \
+case vlSortingAverage : DISPATCH2(deviceType, sorting_average) ; break ; \
+case vlSortingMax : DISPATCH2(deviceType, sorting_max) ; break ; \
 default: assert(false) ; return VLE_Unknown ; \
 }
 
@@ -73,7 +73,7 @@ vl::ErrorCode
 vl::nnsorting_forward(vl::Context& context,
                       vl::Tensor output,
                       vl::Tensor data,
-                      PoolingMethod method,
+                      SortingMethod method,
                       int sortHeight, int sortWidth,
                       int strideY, int strideX,
                       int padTop, int padBottom,
@@ -151,7 +151,7 @@ vl::nnsorting_backward(Context& context,
                        Tensor derData,
                        Tensor data,
                        Tensor derOutput,
-                       PoolingMethod method,
+                       SortingMethod method,
                        int sortHeight, int sortWidth,
                        int strideY, int strideX,
                        int padTop, int padBottom,

@@ -19,38 +19,38 @@ the terms of the BSD license (see the COPYING file).
 #include <sm_20_atomic_functions.h>
 
 /* ---------------------------------------------------------------- */
-/*                                              pooling_max_forward */
+/*                                              sorting_max_forward */
 /* ---------------------------------------------------------------- */
 
 template<typename T> __global__ void
-pooling_max_kernel
-(T* pooled,
+sorting_max_kernel
+(T* sorted,
  const T* data,
- const int pooledWidth,
- const int pooledHeight,
- const int pooledVolume,
+ const int sortedWidth,
+ const int sortedHeight,
+ const int sortedVolume,
  const int width,
  const int height,
- const int poolWidth,
- const int poolHeight,
+ const int sortWidth,
+ const int sortHeight,
  const int strideX,
  const int strideY,
  const int padLeft,
  const int padTop)
 {
-  int pooledIndex = threadIdx.x + blockIdx.x * blockDim.x;
-  if (pooledIndex < pooledVolume) {
-    int px = pooledIndex ;
-    int py = px / pooledWidth ;
-    int pz = py / pooledHeight ;
-    px %= pooledWidth ;
-    py %= pooledHeight ;
+  int sortedIndex = threadIdx.x + blockIdx.x * blockDim.x;
+  if (sortedIndex < sortedVolume) {
+    int px = sortedIndex ;
+    int py = px / sortedWidth ;
+    int pz = py / sortedHeight ;
+    px %= sortedWidth ;
+    py %= sortedHeight ;
     data += pz * (width*height) ;
 
     int x1 = px * strideX - padLeft ;
     int y1 = py * strideY - padTop ;
-    int x2 = min(x1 + poolWidth, width) ;
-    int y2 = min(y1 + poolHeight, height) ;
+    int x2 = min(x1 + sortWidth, width) ;
+    int y2 = min(y1 + sortHeight, height) ;
     x1 = max(x1, 0) ;
     y1 = max(y1, 0) ;
 
@@ -60,77 +60,77 @@ pooling_max_kernel
         bestValue = max(bestValue, data[y * width + x]) ;
       }
     }
-    pooled[pooledIndex] = bestValue ;
+    sorted[sortedIndex] = bestValue ;
   }
 }
 
 /* ---------------------------------------------------------------- */
-/*                                          pooling_average_forward */
+/*                                          sorting_average_forward */
 /* ---------------------------------------------------------------- */
 
 template<typename T> __global__ void
-pooling_average_kernel
-(T* pooled,
+sorting_average_kernel
+(T* sorted,
  const T* data,
- const int pooledWidth,
- const int pooledHeight,
- const int pooledVolume,
+ const int sortedWidth,
+ const int sortedHeight,
+ const int sortedVolume,
  const int width,
  const int height,
- const int poolWidth,
- const int poolHeight,
+ const int sortWidth,
+ const int sortHeight,
  const int strideX,
  const int strideY,
  const int padLeft,
  const int padTop)
 {
-  /* pooledIndex = x + y * pooledWidth + z * (pooledWidth * pooledHeight) */
-  int pooledIndex = threadIdx.x + blockIdx.x * blockDim.x;
-  if (pooledIndex < pooledVolume) {
-    int px = pooledIndex ;
-    int py = px / pooledWidth ;
-    int pz = py / pooledHeight ;
-    px %= pooledWidth ;
-    py %= pooledHeight ;
+  /* sortedIndex = x + y * sortedWidth + z * (sortedWidth * sortedHeight) */
+  int sortedIndex = threadIdx.x + blockIdx.x * blockDim.x;
+  if (sortedIndex < sortedVolume) {
+    int px = sortedIndex ;
+    int py = px / sortedWidth ;
+    int pz = py / sortedHeight ;
+    px %= sortedWidth ;
+    py %= sortedHeight ;
     int x1 = px * strideX - padLeft ;
     int y1 = py * strideY - padTop ;
-    int x2 = min(x1 + poolWidth, width) ;
-    int y2 = min(y1 + poolHeight, height) ;
+    int x2 = min(x1 + sortWidth, width) ;
+    int y2 = min(y1 + sortHeight, height) ;
     x1 = max(x1, 0) ;
     y1 = max(y1, 0) ;
     data += pz * (width*height) ;
     T accum = 0;
-    T poolSize = (y2 - y1)*(x2 - x1);
+    T sortSize = (y2 - y1)*(x2 - x1);
     for (int y = y1 ; y < y2 ; ++y) {
       for (int x = x1 ; x < x2 ; ++x) {
         accum += data[y * width + x] ;
       }
     }
-    pooled[pooledIndex] = accum / poolSize ;
+    sorted[sortedIndex] = accum / sortSize ;
   }
 }
 
 /* ---------------------------------------------------------------- */
-/*                                             pooling_max_backward */
+/*                                             sorting_max_backward */
 /* ---------------------------------------------------------------- */
 
-#ifdef VLNN_CAFFELIKE_BPPOOL
+#ifdef VLNN_CAFFELIKE_BPSORT
 // In order to be able to use this, BP would need to have access to both
-// bottom data and pooled data (currently only passed bottom data...)
+// bottom data and sorted data (currently only passed bottom data...)
 template <typename T> __global__ void
-pooling_max_backward_with_pooled_data
+sorting_max_backward_with_sorted_data
 (T* derData,
  const T* data,
- const T* pooled,
- const T* derPooled,
+ const T* sorted,
+ const T* derSorted,
  const int nthreads,
- const int pooledWidth,
- const int pooledHeight,
+ const int sortedWidth,
+ const int sortedHeight,
  const int width,
  const int height,
  const int depth,
- const int poolWidth,
- const int poolHeight,
+ const int sortWidth,
+ const int sortHeight,
  const int strideX,
  const int strideY)
 {
@@ -141,18 +141,18 @@ pooling_max_backward_with_pooled_data
     int x = index % width;
     int y = (index / width) % height;
     int z = (index / width / height) % depth;
-    int py1 = (y < poolHeight) ? 0 : (y - poolHeight) / strideY + 1;
-    int py2 = min(y / strideY + 1, pooledHeight);
-    int px1 = (x < poolWidth) ? 0 : (x - poolWidth) / strideX + 1;
-    int px2 = min(x / strideX + 1, pooledWidth);
+    int py1 = (y < sortHeight) ? 0 : (y - sortHeight) / strideY + 1;
+    int py2 = min(y / strideY + 1, sortedHeight);
+    int px1 = (x < sortWidth) ? 0 : (x - sortWidth) / strideX + 1;
+    int px2 = min(x / strideX + 1, sortedWidth);
     T gradient = 0;
     T datum = data[(z * height + y) * width + x];
-    pooled += z * pooledHeight * pooledWidth;
-    dzdy += z * pooledHeight * pooledWidth;
+    sorted += z * sortedHeight * sortedWidth;
+    dzdy += z * sortedHeight * sortedWidth;
     for (int py = py1; py < py2; ++py) {
       for (int px = px1; px < px2; ++px) {
-        gradient += dzdy[py * pooledWidth + px] *
-        (datum == pooled[py * pooledWidth + px]);
+        gradient += dzdy[py * sortedWidth + px] *
+        (datum == sorted[py * sortedWidth + px]);
       }
     }
     dzdx[index] = gradient;
@@ -178,36 +178,36 @@ static __device__ double atomicAdd(double* address, double val)
 #endif
 
 template<typename T> __global__ void
-pooling_max_backward_kernel
+sorting_max_backward_kernel
 (T* derData,
  const T* data,
- const T* derPooled,
- const int pooledWidth,
- const int pooledHeight,
- const int pooledVolume,
+ const T* derSorted,
+ const int sortedWidth,
+ const int sortedHeight,
+ const int sortedVolume,
  const int width,
  const int height,
- const int poolWidth,
- const int poolHeight,
+ const int sortWidth,
+ const int sortHeight,
  const int strideX,
  const int strideY,
  const int padLeft,
  const int padTop)
 {
-  int pooledIndex = threadIdx.x + blockIdx.x * blockDim.x;
-  if (pooledIndex < pooledVolume) {
-    int px = pooledIndex ;
-    int py = px / pooledWidth ;
-    int pz = py / pooledHeight ;
-    px %= pooledWidth ;
-    py %= pooledHeight ;
+  int sortedIndex = threadIdx.x + blockIdx.x * blockDim.x;
+  if (sortedIndex < sortedVolume) {
+    int px = sortedIndex ;
+    int py = px / sortedWidth ;
+    int pz = py / sortedHeight ;
+    px %= sortedWidth ;
+    py %= sortedHeight ;
     data += pz * (width*height) ;
     derData += pz * (width*height) ;
 
     int x1 = px * strideX - padLeft ;
     int y1 = py * strideY - padTop ;
-    int x2 = min(x1 + poolWidth, width) ;
-    int y2 = min(y1 + poolHeight, height) ;
+    int x2 = min(x1 + sortWidth, width) ;
+    int y2 = min(y1 + sortHeight, height) ;
     x1 = max(x1, 0) ;
     y1 = max(y1, 0) ;
 
@@ -230,25 +230,25 @@ pooling_max_backward_kernel
      output, or the maximal indexes.
      atomicAdd(add, val)
      */
-    atomicAdd(derData + bestIndex, derPooled[pooledIndex]) ;
+    atomicAdd(derData + bestIndex, derSorted[sortedIndex]) ;
   }
 }
 
 /* ---------------------------------------------------------------- */
-/*                                         pooling_average_backward */
+/*                                         sorting_average_backward */
 /* ---------------------------------------------------------------- */
 
 template <typename T> __global__ void
-pooling_average_backward_kernel(T* derData,
-                                const T* derPooled,
+sorting_average_backward_kernel(T* derData,
+                                const T* derSorted,
                                 const int nthreads,
-                                const int pooledWidth,
-                                const int pooledHeight,
+                                const int sortedWidth,
+                                const int sortedHeight,
                                 const int width,
                                 const int height,
                                 const int depth,
-                                const int poolWidth,
-                                const int poolHeight,
+                                const int sortWidth,
+                                const int sortHeight,
                                 const int strideX,
                                 const int strideY,
                                 const int padLeft,
@@ -264,24 +264,24 @@ pooling_average_backward_kernel(T* derData,
     x_data %= width ;
     y_data %= height ;
 
-    int dx = x_data + padLeft - poolWidth ;
-    int dy = y_data + padTop - poolHeight ;
+    int dx = x_data + padLeft - sortWidth ;
+    int dy = y_data + padTop - sortHeight ;
     int px1 = (dx >= 0) ? dx/strideX + 1 : 0 ;
     int py1 = (dy >= 0) ? dy/strideY + 1 : 0 ;
-    int px2 = min((x_data + padLeft) / strideX, pooledWidth - 1) ;
-    int py2 = min((y_data + padTop) / strideY, pooledHeight - 1) ;
+    int px2 = min((x_data + padLeft) / strideX, sortedWidth - 1) ;
+    int py2 = min((y_data + padTop) / strideY, sortedHeight - 1) ;
     T accumulator = 0 ;
-    derPooled += z * pooledHeight * pooledWidth;
+    derSorted += z * sortedHeight * sortedWidth;
     for (int py = py1 ; py <= py2 ; ++py) {
       for (int px = px1 ; px <= px2 ; ++px) {
         int x1 = px * strideX - padLeft ;
         int y1 = py * strideY - padTop ;
-        int x2 = min(x1 + poolWidth, width) ;
-        int y2 = min(y1 + poolHeight, height) ;
+        int x2 = min(x1 + sortWidth, width) ;
+        int y2 = min(y1 + sortHeight, height) ;
         x1 = max(x1, 0) ;
         y1 = max(y1, 0) ;
-        T poolSize = (y2 - y1) * (x2 - x1);
-        accumulator += derPooled[py * pooledWidth + px] / poolSize ;
+        T sortSize = (y2 - y1) * (x2 - x1);
+        accumulator += derSorted[py * sortedWidth + px] / sortSize ;
       }
     }
     derData[index] = accumulator ;
@@ -295,27 +295,27 @@ pooling_average_backward_kernel(T* derData,
 namespace vl { namespace impl {
 
   template <typename type>
-  struct pooling_max<vl::VLDT_GPU, type>
+  struct sorting_max<vl::VLDT_GPU, type>
   {
     static vl::ErrorCode
-    forward(type* pooled,
+    forward(type* sorted,
             type const* data,
             size_t height, size_t width, size_t depth,
-            size_t poolHeight, size_t poolWidth,
+            size_t sortHeight, size_t sortWidth,
             size_t strideY, size_t strideX,
             size_t padTop, size_t padBottom,
             size_t padLeft, size_t padRight)
     {
-      int pooledWidth = (width + (padLeft+padRight) - poolWidth)/strideX + 1 ;
-      int pooledHeight = (height + (padTop+padBottom) - poolHeight)/strideY + 1 ;
-      int pooledVolume = pooledWidth * pooledHeight * depth ;
+      int sortedWidth = (width + (padLeft+padRight) - sortWidth)/strideX + 1 ;
+      int sortedHeight = (height + (padTop+padBottom) - sortHeight)/strideY + 1 ;
+      int sortedVolume = sortedWidth * sortedHeight * depth ;
 
-      pooling_max_kernel<type>
-      <<< divideAndRoundUp(pooledVolume, VL_CUDA_NUM_THREADS), VL_CUDA_NUM_THREADS >>>
-      (pooled, data,
-       pooledHeight, pooledWidth, pooledVolume,
+      sorting_max_kernel<type>
+      <<< divideAndRoundUp(sortedVolume, VL_CUDA_NUM_THREADS), VL_CUDA_NUM_THREADS >>>
+      (sorted, data,
+       sortedHeight, sortedWidth, sortedVolume,
        height, width,
-       poolHeight, poolWidth,
+       sortHeight, sortWidth,
        strideY, strideX,
        padTop, padLeft);
 
@@ -328,51 +328,51 @@ namespace vl { namespace impl {
              type const* data,
              type const* derOutput,
              size_t height, size_t width, size_t depth,
-             size_t poolHeight, size_t poolWidth,
+             size_t sortHeight, size_t sortWidth,
              size_t strideY, size_t strideX,
              size_t padTop, size_t padBottom,
              size_t padLeft, size_t padRight)
     {
-      int pooledWidth = (width + (padLeft+padRight) - poolWidth)/strideX + 1 ;
-      int pooledHeight = (height + (padTop+padBottom) - poolHeight)/strideY + 1 ;
-      int pooledVolume = pooledWidth * pooledHeight * depth ;
+      int sortedWidth = (width + (padLeft+padRight) - sortWidth)/strideX + 1 ;
+      int sortedHeight = (height + (padTop+padBottom) - sortHeight)/strideY + 1 ;
+      int sortedVolume = sortedWidth * sortedHeight * depth ;
 
-      pooling_max_backward_kernel<type>
-      <<< divideAndRoundUp(pooledVolume, VL_CUDA_NUM_THREADS), VL_CUDA_NUM_THREADS >>>
+      sorting_max_backward_kernel<type>
+      <<< divideAndRoundUp(sortedVolume, VL_CUDA_NUM_THREADS), VL_CUDA_NUM_THREADS >>>
       (derData, data, derOutput,
-       pooledHeight, pooledWidth, pooledVolume,
+       sortedHeight, sortedWidth, sortedVolume,
        height, width,
-       poolHeight, poolWidth,
+       sortHeight, sortWidth,
        strideY, strideX,
        padTop, padLeft);
 
       cudaError_t status = cudaPeekAtLastError() ;
       return (status == cudaSuccess) ? vl::VLE_Success : vl::VLE_Cuda ;
     }
-  } ; // pooling_max
+  } ; // sorting_max
 
   template <typename type>
-  struct pooling_average<vl::VLDT_GPU, type>
+  struct sorting_average<vl::VLDT_GPU, type>
   {
 
     static vl::ErrorCode
-    forward(type* pooled,
+    forward(type* sorted,
             type const* data,
             size_t height, size_t width, size_t depth,
-            size_t poolHeight, size_t poolWidth,
+            size_t sortHeight, size_t sortWidth,
             size_t strideY, size_t strideX,
             size_t padTop, size_t padBottom, size_t padLeft, size_t padRight)
     {
-      int pooledWidth = (width + (padLeft+padRight) - poolWidth)/strideX + 1 ;
-      int pooledHeight = (height + (padTop+padBottom) - poolHeight)/strideY + 1 ;
-      int pooledVolume = pooledWidth * pooledHeight * depth ;
+      int sortedWidth = (width + (padLeft+padRight) - sortWidth)/strideX + 1 ;
+      int sortedHeight = (height + (padTop+padBottom) - sortHeight)/strideY + 1 ;
+      int sortedVolume = sortedWidth * sortedHeight * depth ;
 
-      pooling_average_kernel<type>
-      <<< divideAndRoundUp(pooledVolume, VL_CUDA_NUM_THREADS), VL_CUDA_NUM_THREADS >>>
-      (pooled, data,
-       pooledHeight, pooledWidth, pooledVolume,
+      sorting_average_kernel<type>
+      <<< divideAndRoundUp(sortedVolume, VL_CUDA_NUM_THREADS), VL_CUDA_NUM_THREADS >>>
+      (sorted, data,
+       sortedHeight, sortedWidth, sortedVolume,
        height, width,
-       poolHeight, poolWidth,
+       sortHeight, sortWidth,
        strideY, strideX,
        padTop, padLeft);
 
@@ -382,40 +382,40 @@ namespace vl { namespace impl {
 
     static vl::ErrorCode
     backward(type* derData,
-             type const* derPooled,
+             type const* derSorted,
              size_t height, size_t width, size_t depth,
-             size_t poolHeight, size_t poolWidth,
+             size_t sortHeight, size_t sortWidth,
              size_t strideY, size_t strideX,
              size_t padTop, size_t padBottom,
              size_t padLeft, size_t padRight)
     {
-      int pooledWidth = (width + (padLeft+padRight) - poolWidth)/strideX + 1 ;
-      int pooledHeight = (height + (padTop+padBottom) - poolHeight)/strideY + 1 ;
+      int sortedWidth = (width + (padLeft+padRight) - sortWidth)/strideX + 1 ;
+      int sortedHeight = (height + (padTop+padBottom) - sortHeight)/strideY + 1 ;
       int dataVolume = width * height * depth ;
 
-      pooling_average_backward_kernel<type>
+      sorting_average_backward_kernel<type>
       <<< divideAndRoundUp(dataVolume, VL_CUDA_NUM_THREADS), VL_CUDA_NUM_THREADS >>>
-      (derData, derPooled,
+      (derData, derSorted,
        dataVolume,
-       pooledHeight, pooledWidth,
+       sortedHeight, sortedWidth,
        height, width, dataVolume,
-       poolHeight, poolWidth,
+       sortHeight, sortWidth,
        strideY, strideX,
        padTop, padLeft);
 
       cudaError_t status = cudaPeekAtLastError() ;
       return (status == cudaSuccess) ? vl::VLE_Success : vl::VLE_Cuda ;
     }
-  } ; // pooling_average
+  } ; // sorting_average
 
 } } ; // namespace vl::impl
 
 // Instantiations
-template struct vl::impl::pooling_max<vl::VLDT_GPU, float> ;
-template struct vl::impl::pooling_average<vl::VLDT_GPU, float> ;
+template struct vl::impl::sorting_max<vl::VLDT_GPU, float> ;
+template struct vl::impl::sorting_average<vl::VLDT_GPU, float> ;
 
 #ifdef ENABLE_DOUBLE
-template struct vl::impl::pooling_max<vl::VLDT_GPU, double> ;
-template struct vl::impl::pooling_average<vl::VLDT_GPU, double> ;
+template struct vl::impl::sorting_max<vl::VLDT_GPU, double> ;
+template struct vl::impl::sorting_average<vl::VLDT_GPU, double> ;
 #endif
 
