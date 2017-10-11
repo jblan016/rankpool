@@ -23,25 +23,25 @@ namespace vl {
   enum PoolingMethod { vlPoolingMax, vlPoolingAverage } ;
 
   vl::ErrorCode
-  nnpooling_forward(vl::Context& context,
+  nnsorting_forward(vl::Context& context,
                     vl::Tensor output,
                     vl::Tensor data,
                     PoolingMethod method,
-                    int poolHeight, int poolWidth,
+                    int sortHeight, int sortWidth,
                     int strideY, int strideX,
                     int padTop, int padBottom,
                     int padLeft, int padRight) ;
 
   vl::ErrorCode
-  nnpooling_backward(vl::Context& context,
+  nnsorting_backward(vl::Context& context,
                      vl::Tensor derData,
                      vl::Tensor data,
                      vl::Tensor derOutput,
                      PoolingMethod method,
-                     int poolHeight, int poolWidth,
+                     int sortHeight, int sortWidth,
                      int strideY, int strideX,
                      int padTop, int padBottom,
                      int padLeft, int padRight) ;
 }
 
-#endif /* defined(__vl__nnpooling__) */
+#endif /* defined(__vl__nnsorting__) */

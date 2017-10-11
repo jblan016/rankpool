@@ -1,5 +1,5 @@
-// @file nnpooling_blas.cu
-// @brief Pooling block CuDNN-based implementation.
+// @file nnsorting_blas.cu
+// @brief Sorting block CuDNN-based implementation.
 // @author Andrea Vedaldi
 
 /*
@@ -11,10 +11,10 @@
  */
 
 #if !defined(ENABLE_GPU) | !defined(ENABLE_CUDNN)
-#error "nnpooling_cudnn.hpp cannot be compiled without GPU and CUDNN support."
+#error "nnsorting_cudnn.hpp cannot be compiled without GPU and CUDNN support."
 #endif
 
-#include "nnpooling_cudnn.hpp"
+#include "nnsorting_cudnn.hpp"
 #include "cudnnhelper.hpp"
 #include "../datacu.hpp"
 #include <assert.h>
@@ -31,7 +31,7 @@ goto done ; \
 } }
 
 /* ---------------------------------------------------------------- */
-/*                                         nnpooling_cudnn::forward */
+/*                                         nnsorting_cudnn::forward */
 /* ---------------------------------------------------------------- */
 
 
@@ -40,11 +40,11 @@ namespace vl { namespace impl {
 
   template<vl::DataType dataType>
   vl::ErrorCode
-  nnpooling_cudnn<dataType>::forward(Context& context,
+  nnsorting_cudnn<dataType>::forward(Context& context,
                                      Tensor output,
                                      Tensor data,
-                                     PoolingMethod method,
-                                     int poolHeight, int poolWidth,
+                                     SortingMethod method,
+                                     int sortHeight, int sortWidth,
                                      int strideY, int strideX,
                                      int padTop, int padBottom,
                                      int padLeft, int padRight)
@@ -55,15 +55,15 @@ namespace vl { namespace impl {
     typedef typename DataTypeTraits<dataType>::type type ;
 
     cudnnTensorDescriptor_t outputDesc, dataDesc ;
-    cudnnPoolingDescriptor_t poolingDesc ;
+    cudnnSortingDescriptor_t sortingDesc ;
     bool outputDescInitialized = false ;
     bool dataDescInitialized = false ;
-    bool poolingDescInitialized = false ;
+    bool sortingDescInitialized = false ;
 
     if (padLeft != padRight) return vl::VLE_Unsupported ;
     if (padTop != padBottom) return vl::VLE_Unsupported ;
 
-    if (method == vlPoolingAverage && (padLeft > 0 | padRight > 0)) {
+    if (method == vlSortingAverage && (padLeft > 0 | padRight > 0)) {
       /* This seems like a bug in CUDNN? */
       return vl::VLE_Unsupported ;
     }
@@ -100,12 +100,12 @@ namespace vl { namespace impl {
                                      data.getWidth(),
                                      data.getHeight())) ;
 
-    CHECK(cudnnCreatePoolingDescriptor(&poolingDesc)) ;
-    poolingDescInitialized = true ;
-    CHECK(cudnnSetPooling2dDescriptor(poolingDesc,
-                                      (method == vl::vlPoolingAverage) ? CUDNN_POOLING_AVERAGE_COUNT_INCLUDE_PADDING : CUDNN_POOLING_MAX,
+    CHECK(cudnnCreateSortingDescriptor(&sortingDesc)) ;
+    sortingDescInitialized = true ;
+    CHECK(cudnnSetSorting2dDescriptor(sortingDesc,
+                                      (method == vl::vlSortingAverage) ? CUDNN_SORTING_AVERAGE_COUNT_INCLUDE_PADDING : CUDNN_SORTING_MAX,
                                       IF_CUDNN_GE5(CUDNN_NOT_PROPAGATE_NAN COMMA)
-                                      poolWidth, poolHeight,
+                                      sortWidth, sortHeight,
                                       padLeft, padTop,
                                       strideX, strideY)) ;
 
@@ -113,8 +113,8 @@ namespace vl { namespace impl {
     {
       type alpha = 1.0f ;
       type beta = 0.0f ;
-      CHECK(cudnnPoolingForward(handle,
-                                poolingDesc,
+      CHECK(cudnnSortingForward(handle,
+                                sortingDesc,
                                 &alpha,
                                 dataDesc, data.getMemory(),
                                 &beta,
@@ -123,25 +123,25 @@ namespace vl { namespace impl {
 
     /* cleanup */
   done:
-    if (poolingDescInitialized) { cudnnDestroyPoolingDescriptor(poolingDesc) ; }
+    if (sortingDescInitialized) { cudnnDestroySortingDescriptor(sortingDesc) ; }
     if (dataDescInitialized) { cudnnDestroyTensorDescriptor(dataDesc) ; }
     if (outputDescInitialized) { cudnnDestroyTensorDescriptor(outputDesc) ; }
-    return context.passError(error, "nnpooling_cudnn::forward") ;
+    return context.passError(error, "nnsorting_cudnn::forward") ;
   }
 
   /* ---------------------------------------------------------------- */
-  /*                                        nnpooling_cudnn::backward */
+  /*                                        nnsorting_cudnn::backward */
   /* ---------------------------------------------------------------- */
 
   template<vl::DataType dataType>
   vl::ErrorCode
-  nnpooling_cudnn<dataType>::backward(Context& context,
+  nnsorting_cudnn<dataType>::backward(Context& context,
                                       Tensor derData,
                                       Tensor data,
                                       Tensor output,
                                       Tensor derOutput,
-                                      vl::PoolingMethod method,
-                                      int poolHeight, int poolWidth,
+                                      vl::SortingMethod method,
+                                      int sortHeight, int sortWidth,
                                       int strideY, int strideX,
                                       int padTop, int padBottom,
                                       int padLeft, int padRight)
@@ -154,15 +154,15 @@ namespace vl { namespace impl {
     typedef typename DataTypeTraits<dataType>::type type ;
 
     cudnnTensorDescriptor_t outputDesc, dataDesc ;
-    cudnnPoolingDescriptor_t poolingDesc ;
+    cudnnSortingDescriptor_t sortingDesc ;
     bool outputDescInitialized = false ;
     bool dataDescInitialized = false ;
-    bool poolingDescInitialized = false ;
+    bool sortingDescInitialized = false ;
 
     if (padLeft != padRight) return vl::VLE_Unsupported ;
     if (padTop != padBottom) return vl::VLE_Unsupported ;
 
-    if (method == vlPoolingAverage && (padLeft > 0 | padRight > 0)) {
+    if (method == vlSortingAverage && (padLeft > 0 | padRight > 0)) {
       /* This seems like a bug in CuDNN? */
       return vl::VLE_Unsupported ;
     }
@@ -199,12 +199,12 @@ namespace vl { namespace impl {
                                      data.getWidth(),
                                      data.getHeight())) ;
 
-    CHECK(cudnnCreatePoolingDescriptor(&poolingDesc)) ;
-    poolingDescInitialized = true ;
-    CHECK(cudnnSetPooling2dDescriptor(poolingDesc,
-                                      (method == vl::vlPoolingAverage) ? CUDNN_POOLING_AVERAGE_COUNT_INCLUDE_PADDING : CUDNN_POOLING_MAX,
+    CHECK(cudnnCreateSortingDescriptor(&sortingDesc)) ;
+    sortingDescInitialized = true ;
+    CHECK(cudnnSetSorting2dDescriptor(sortingDesc,
+                                      (method == vl::vlSortingAverage) ? CUDNN_SORTING_AVERAGE_COUNT_INCLUDE_PADDING : CUDNN_SORTING_MAX,
                                       IF_CUDNN_GE5(CUDNN_NOT_PROPAGATE_NAN COMMA)
-                                      poolWidth, poolHeight,
+                                      sortWidth, sortHeight,
                                       padLeft, padTop,
                                       strideX, strideY)) ;
 
@@ -212,8 +212,8 @@ namespace vl { namespace impl {
     {
       type alpha = 1.0f ;
       type beta = 0.0f ;
-      CHECK(cudnnPoolingBackward(handle,
-                                 poolingDesc,
+      CHECK(cudnnSortingBackward(handle,
+                                 sortingDesc,
                                  &alpha,
                                  outputDesc, (type const*)output.getMemory(),
                                  outputDesc, (type const*)derOutput.getMemory(),
@@ -224,7 +224,7 @@ namespace vl { namespace impl {
 
     /* cleanup */
   done:
-    if (poolingDescInitialized) { cudnnDestroyPoolingDescriptor(poolingDesc) ; }
+    if (sortingDescInitialized) { cudnnDestroySortingDescriptor(sortingDesc) ; }
     if (dataDescInitialized) { cudnnDestroyTensorDescriptor(dataDesc) ; }
     if (outputDescInitialized) { cudnnDestroyTensorDescriptor(outputDesc) ; }
     return context.passError(error, __func__) ;
@@ -233,10 +233,10 @@ namespace vl { namespace impl {
 } }
 
 // Instantiations
-template struct vl::impl::nnpooling_cudnn<vl::VLDT_Float> ;
+template struct vl::impl::nnsorting_cudnn<vl::VLDT_Float> ;
 
 #ifdef ENABLE_DOUBLE
-template struct vl::impl::nnpooling_cudnn<vl::VLDT_Double> ;
+template struct vl::impl::nnsorting_cudnn<vl::VLDT_Double> ;
 #endif
 
 
