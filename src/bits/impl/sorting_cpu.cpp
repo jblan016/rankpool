@@ -1,5 +1,5 @@
 // @file sorting_cpu.cpp
-// @brief Pooling block implementation (GPU)
+// @brief Sorting block implementation (GPU)
 // @author Andrea Vedaldi
 // @author Karel Lenc
 
@@ -167,7 +167,7 @@ sorting_forward_cpu(type* sorted,
 template<typename type, typename Accumulator> static inline void
 sorting_backward_cpu(type* derData,
                      type const* data,
-                     type const* derPooled,
+                     type const* derSorted,
                      size_t width, size_t height, size_t depth,
                      size_t windowWidth, size_t windowHeight,
                      size_t strideX, size_t strideY,
@@ -184,7 +184,7 @@ sorting_backward_cpu(type* derData,
         int y2 = std::min(y1 + windowHeight, height) ;
         x1 = std::max(x1, 0) ;
         y1 = std::max(y1, 0) ;
-        Accumulator acc(y2 - y1, x2 - x1, derPooled[y * sortedWidth + x]) ;
+        Accumulator acc(y2 - y1, x2 - x1, derSorted[y * sortedWidth + x]) ;
         for (int v = y1 ; v < y2 ; ++v) {
           for (int u = x1 ; u < x2 ; ++u) {
             acc.accumulate_backward(&data[v * width + u],
@@ -196,7 +196,7 @@ sorting_backward_cpu(type* derData,
     }
     data += width*height ;
     derData += width*height ;
-    derPooled += sortedWidth*sortedHeight ;
+    derSorted += sortedWidth*sortedHeight ;
   }
 }
 
@@ -269,7 +269,7 @@ namespace vl { namespace impl {
 
     static vl::ErrorCode
     backward(type* derData,
-             type const* derPooled,
+             type const* derSorted,
              size_t height, size_t width, size_t depth,
              size_t sortHeight, size_t sortWidth,
              size_t strideY, size_t strideX,
@@ -277,7 +277,7 @@ namespace vl { namespace impl {
              size_t padLeft, size_t padRight)
     {
       sorting_backward_cpu<type, acc_sum<type> > (derData,
-                                                  NULL, derPooled,
+                                                  NULL, derSorted,
                                                   height, width, depth,
                                                   sortHeight, sortWidth,
                                                   strideY, strideX,
