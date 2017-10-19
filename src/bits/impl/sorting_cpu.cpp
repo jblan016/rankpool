@@ -128,7 +128,7 @@ sorting_forward_cpu(type* sorted,
                     size_t strideX, size_t strideY,
                     size_t padLeft, size_t padRight, size_t padTop, size_t padBottom)
 {
-  int sortedWidth = (width + (padLeft + padRight) - windowWidth)/strideX + 1 ;
+  int sortedWidth = (width + (padLeft + padRight) - windowWidth)/strideX + 1 ;/* sortedWidth=[(_Pl+Pr+W-w/Dw_)+1]*w */
   int sortedHeight = (height + (padTop + padBottom) - windowHeight)/strideY + 1 ;
   for (int z = 0; z < depth; ++z) {
     for (int y = 0; y < sortedHeight; ++y) {
