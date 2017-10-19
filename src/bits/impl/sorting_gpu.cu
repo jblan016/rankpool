@@ -17,6 +17,7 @@ the terms of the BSD license (see the COPYING file).
 #include <assert.h>
 #include <float.h>
 #include <sm_20_atomic_functions.h>
+#include <thrust/sort.h>
 
 /* ---------------------------------------------------------------- */
 /*                                              sorting_max_forward */
