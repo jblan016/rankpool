@@ -17,58 +17,63 @@ the terms of the BSD license (see the COPYING file).
 #include <assert.h>
 #include <float.h>
 #include <sm_20_atomic_functions.h>
-
+#include <cub/cub.cuh>
 
 /* ---------------------------------------------------------------- */
 /*                                              sorting_max_forward */
 /* ---------------------------------------------------------------- */
 
-template<typename T> __global__ void
+template<typename T, int BLOCK_THREADS, int ITEMS_PER_THREAD> __global__ void
 sorting_kernel
 (T* sorted,
  const T* data,
- const int sortedWidth,
- const int sortedHeight,
- const int sortedVolume,
- const int width,
- const int height,
- const int sortWidth,
- const int sortHeight,
- const int strideX,
- const int strideY,
- const int padLeft,
- const int padTop)
+ const int Width,
+ const int Height,
+ const int windowWidth,
+ const int windowHeight,
+ const int strideWidth,
+ const int strideHeight,
+ const int BoxesInWidth
+ )
 {
-  int sortedIndex = threadIdx.x + blockIdx.x * blockDim.x;
-  if (sortedIndex < sortedVolume) {
-    int px = sortedIndex ;  // p pour position a la sortie
-    int py = px / sortedWidth ;
-    int pz = py / sortedHeight ; // entree deja vectorisee donc il faut specifier les coordonnees par px,py,pz
-    px %= sortedWidth ;
-    py %= sortedHeight ;
-    data += pz * (width*height) ;// incrementation du plan complet
+	const int numElemsPerArray = BLOCK_THREADS * ITEMS_PER_THREAD;
+    // --- Shared memory allocation
+	__shared__ T sharedMemoryValueArray[numElemsPerArray];
+    // --- Specialize BlockStore and BlockRadixSort collective types
+    typedef cub::BlockRadixSort <int , BLOCK_THREADS, ITEMS_PER_THREAD> BlockRadixSortT; //led dernier argument est pour le rang
 
-// coordos des fenestres
-    int x1 = px * strideX - padLeft ;
-    int y1 = py * strideY - padTop ;
-    int x2 = min(x1 + sortWidth, width) ;
-    int y2 = min(y1 + sortHeight, height) ;
-    x1 = max(x1, 0) ;
-    y1 = max(y1, 0) ;
-
-    T bestValue = data[y1 * width + x1] ;// bestvalue= contenu de data @ l'incrementation de la rangee sur data
-    for (int y = y1 ; y < y2 ; ++y) {
-      for (int x = x1 ; x < x2 ; ++x) {
-        bestValue = max(bestValue, data[y * width + x]) ;//dans la fenestre comparer tout les elements et garder le max
-      }
+    // --- Allocate type-safe, repurposable shared memory for collectives
+    __shared__ typename BlockRadixSortT::TempStorage temp_storage;
+// section d_in->d_out
+    int offsetk= blockIdx.y*gridDim.x*numElemsPerArray;
+    int offsetj=blockIdx.x/BoxesInWidth;
+    offsetj=offsetj*strideWidth;
+    int offseti=blockIdx.x%BoxesInWidth;
+        offseti=offseti*strideHeight;
+//
+    int block_offset = numElemsPerArray * blockIdx.x+offsetk;
+    int arrayAddress = 0;
+    int windowoffsetj = 0;
+    // --- Load data to shared memory
+    for (int k = 0; k < ITEMS_PER_THREAD; k++){
+    	arrayAddress = threadIdx.x * ITEMS_PER_THREAD + k;
+    	windowoffsetj=(arrayAddress/windowHeight + offsetj) * Height;
+    	sharedMemoryValueArray[arrayAddress]  = data[arrayAddress%windowHeight+windowoffsetj+offseti+offsetk];//loads array
     }
-    //for (int y = y1 ; y < y2 ; ++y) {
-    //  for (int x = x1 ; x < x2 ; ++x) {
-    //    bestValue = max(bestValue, data[y * width + x]) ;//dans la fenestre comparer tout les elements et garder le max
-    //  }
-    //}
-    sorted[sortedIndex] = bestValue ;//retourner la sortie decimee
-  }
+    __syncthreads();
+
+    // --- Collectively sort the keys
+    BlockRadixSortT(temp_storage).Sort(*static_cast<T(*)[ITEMS_PER_THREAD]>(static_cast<void*>(sharedMemoryValueArray + (threadIdx.x * ITEMS_PER_THREAD))));
+
+    __syncthreads();
+
+    // --- Write data from shared memory
+    for (int k = 0; k < ITEMS_PER_THREAD; k++){
+    	arrayAddress = threadIdx.x * ITEMS_PER_THREAD + k;
+    	windowoffsetj=(arrayAddress/windowHeight + offsetj) * Height;
+    	sorted[block_offset + arrayAddress] = sharedMemoryValueArray[arrayAddress];
+    }
+
 }
 
 
@@ -118,7 +123,7 @@ sorting_max_backward_with_sorted_data
         (datum == sorted[py * sortedWidth + px]);
       }
     }
-    dzdx[index] = gradient;//where is derData, and derSorted???
+    dzdx[index] = gradient;//where is derData, and derSorted??? assume wrong for now
   }
 }
 #endif
@@ -187,7 +192,7 @@ sorting_max_backward_kernel
       }
     }
     /*
-     This is bad(why?), but required to eliminate a race condition when writing
+     This is bad(why the following?), but required to eliminate a race condition when writing
      to bottom_diff.
      Caffe goes the other way around, but requrires remembering the layer
      output, or the maximal indexes.
