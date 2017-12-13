@@ -1,5 +1,5 @@
-// @file nnpooling_blas.hpp
-// @brief Pooling block CuDNN-based implementation.
+// @file nnsorting_blas.hpp
+// @brief Sorting block CuDNN-based implementation.
 // @author Andrea Vedaldi
 
 /*
@@ -10,10 +10,10 @@ This file is part of the VLFeat library and is made available under
 the terms of the BSD license (see the COPYING file).
 */
 
-#ifndef __vl__nnpooling_cudnn__
-#define __vl__nnpooling_cudnn__
+#ifndef __vl__nnsorting_cudnn__
+#define __vl__nnsorting_cudnn__
 
-#include "../nnpooling.hpp"
+#include "../nnsorting.hpp"
 #include "../data.hpp"
 #include "cudnn.h"
 
@@ -23,14 +23,14 @@ namespace vl { namespace impl {
   // todo: data type should be handled internally?
 
   template<vl::DataType dataType>
-  struct nnpooling_cudnn
+  struct nnsorting_cudnn
   {
     static vl::ErrorCode
     forward(Context& context,
             Tensor output,
             Tensor data,
-            vl::PoolingMethod method,
-            int poolHeight, int poolWidth,
+            vl::SortingMethod method,
+            int sortHeight, int sortWidth,
             int strideY, int strideX,
             int padTop, int padBottom,
             int padLeft, int padRight) ;
@@ -41,8 +41,8 @@ namespace vl { namespace impl {
              Tensor data,
              Tensor output,
              Tensor derOutput,
-             vl::PoolingMethod method,
-             int poolHeight, int poolWidth,
+             vl::SortingMethod method,
+             int sortHeight, int sortWidth,
              int strideY, int strideX,
              int padTop, int padBottom,
              int padLeft, int padRight) ;
@@ -50,4 +50,4 @@ namespace vl { namespace impl {
 
 } }
 
-#endif /* defined(__vl__nnpooling_cudnn__) */
+#endif /* defined(__vl__nnsorting_cudnn__) */

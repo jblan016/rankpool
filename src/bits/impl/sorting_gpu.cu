@@ -17,14 +17,14 @@ the terms of the BSD license (see the COPYING file).
 #include <assert.h>
 #include <float.h>
 #include <sm_20_atomic_functions.h>
-#include <thrust/sort.h>
+
 
 /* ---------------------------------------------------------------- */
 /*                                              sorting_max_forward */
 /* ---------------------------------------------------------------- */
 
 template<typename T> __global__ void
-sorting_max_kernel
+sorting_kernel
 (T* sorted,
  const T* data,
  const int sortedWidth,
@@ -41,13 +41,14 @@ sorting_max_kernel
 {
   int sortedIndex = threadIdx.x + blockIdx.x * blockDim.x;
   if (sortedIndex < sortedVolume) {
-    int px = sortedIndex ;
+    int px = sortedIndex ;  // p pour position a la sortie
     int py = px / sortedWidth ;
-    int pz = py / sortedHeight ;
+    int pz = py / sortedHeight ; // entree deja vectorisee donc il faut specifier les coordonnees par px,py,pz
     px %= sortedWidth ;
     py %= sortedHeight ;
-    data += pz * (width*height) ;
+    data += pz * (width*height) ;// incrementation du plan complet
 
+// coordos des fenestres
     int x1 = px * strideX - padLeft ;
     int y1 = py * strideY - padTop ;
     int x2 = min(x1 + sortWidth, width) ;
@@ -55,61 +56,22 @@ sorting_max_kernel
     x1 = max(x1, 0) ;
     y1 = max(y1, 0) ;
 
-    T bestValue = data[y1 * width + x1] ;
+    T bestValue = data[y1 * width + x1] ;// bestvalue= contenu de data @ l'incrementation de la rangee sur data
     for (int y = y1 ; y < y2 ; ++y) {
       for (int x = x1 ; x < x2 ; ++x) {
-        bestValue = max(bestValue, data[y * width + x]) ;
+        bestValue = max(bestValue, data[y * width + x]) ;//dans la fenestre comparer tout les elements et garder le max
       }
     }
-    sorted[sortedIndex] = bestValue ;
+    //for (int y = y1 ; y < y2 ; ++y) {
+    //  for (int x = x1 ; x < x2 ; ++x) {
+    //    bestValue = max(bestValue, data[y * width + x]) ;//dans la fenestre comparer tout les elements et garder le max
+    //  }
+    //}
+    sorted[sortedIndex] = bestValue ;//retourner la sortie decimee
   }
 }
 
-/* ---------------------------------------------------------------- */
-/*                                          sorting_average_forward */
-/* ---------------------------------------------------------------- */
 
-template<typename T> __global__ void
-sorting_average_kernel
-(T* sorted,
- const T* data,
- const int sortedWidth,
- const int sortedHeight,
- const int sortedVolume,
- const int width,
- const int height,
- const int sortWidth,
- const int sortHeight,
- const int strideX,
- const int strideY,
- const int padLeft,
- const int padTop)
-{
-  /* sortedIndex = x + y * sortedWidth + z * (sortedWidth * sortedHeight) */
-  int sortedIndex = threadIdx.x + blockIdx.x * blockDim.x;
-  if (sortedIndex < sortedVolume) {
-    int px = sortedIndex ;
-    int py = px / sortedWidth ;
-    int pz = py / sortedHeight ;
-    px %= sortedWidth ;
-    py %= sortedHeight ;
-    int x1 = px * strideX - padLeft ;
-    int y1 = py * strideY - padTop ;
-    int x2 = min(x1 + sortWidth, width) ;
-    int y2 = min(y1 + sortHeight, height) ;
-    x1 = max(x1, 0) ;
-    y1 = max(y1, 0) ;
-    data += pz * (width*height) ;
-    T accum = 0;
-    T sortSize = (y2 - y1)*(x2 - x1);
-    for (int y = y1 ; y < y2 ; ++y) {
-      for (int x = x1 ; x < x2 ; ++x) {
-        accum += data[y * width + x] ;
-      }
-    }
-    sorted[sortedIndex] = accum / sortSize ;
-  }
-}
 
 /* ---------------------------------------------------------------- */
 /*                                             sorting_max_backward */
@@ -156,7 +118,7 @@ sorting_max_backward_with_sorted_data
         (datum == sorted[py * sortedWidth + px]);
       }
     }
-    dzdx[index] = gradient;
+    dzdx[index] = gradient;//where is derData, and derSorted???
   }
 }
 #endif
@@ -225,7 +187,7 @@ sorting_max_backward_kernel
       }
     }
     /*
-     This is bad, but required to eliminate a race condition when writing
+     This is bad(why?), but required to eliminate a race condition when writing
      to bottom_diff.
      Caffe goes the other way around, but requrires remembering the layer
      output, or the maximal indexes.
@@ -235,59 +197,7 @@ sorting_max_backward_kernel
   }
 }
 
-/* ---------------------------------------------------------------- */
-/*                                         sorting_average_backward */
-/* ---------------------------------------------------------------- */
 
-template <typename T> __global__ void
-sorting_average_backward_kernel(T* derData,
-                                const T* derSorted,
-                                const int nthreads,
-                                const int sortedWidth,
-                                const int sortedHeight,
-                                const int width,
-                                const int height,
-                                const int depth,
-                                const int sortWidth,
-                                const int sortHeight,
-                                const int strideX,
-                                const int strideY,
-                                const int padLeft,
-                                const int padTop)
-{
-  int index = blockIdx.x * blockDim.x + threadIdx.x;
-  if (index < nthreads) {
-    /* To understand the logic of this piece of code see the
-     comments to of the row2im backward kernel */
-    int x_data = index ;
-    int y_data = x_data / width ;
-    int z = y_data / height ;
-    x_data %= width ;
-    y_data %= height ;
-
-    int dx = x_data + padLeft - sortWidth ;
-    int dy = y_data + padTop - sortHeight ;
-    int px1 = (dx >= 0) ? dx/strideX + 1 : 0 ;
-    int py1 = (dy >= 0) ? dy/strideY + 1 : 0 ;
-    int px2 = min((x_data + padLeft) / strideX, sortedWidth - 1) ;
-    int py2 = min((y_data + padTop) / strideY, sortedHeight - 1) ;
-    T accumulator = 0 ;
-    derSorted += z * sortedHeight * sortedWidth;
-    for (int py = py1 ; py <= py2 ; ++py) {
-      for (int px = px1 ; px <= px2 ; ++px) {
-        int x1 = px * strideX - padLeft ;
-        int y1 = py * strideY - padTop ;
-        int x2 = min(x1 + sortWidth, width) ;
-        int y2 = min(y1 + sortHeight, height) ;
-        x1 = max(x1, 0) ;
-        y1 = max(y1, 0) ;
-        T sortSize = (y2 - y1) * (x2 - x1);
-        accumulator += derSorted[py * sortedWidth + px] / sortSize ;
-      }
-    }
-    derData[index] = accumulator ;
-  }
-}
 
 /* ---------------------------------------------------------------- */
 /*                                                        Interface */
@@ -352,71 +262,14 @@ namespace vl { namespace impl {
     }
   } ; // sorting_max
 
-  template <typename type>
-  struct sorting_average<vl::VLDT_GPU, type>
-  {
-
-    static vl::ErrorCode
-    forward(type* sorted,
-            type const* data,
-            size_t height, size_t width, size_t depth,
-            size_t sortHeight, size_t sortWidth,
-            size_t strideY, size_t strideX,
-            size_t padTop, size_t padBottom, size_t padLeft, size_t padRight)
-    {
-      int sortedWidth = (width + (padLeft+padRight) - sortWidth)/strideX + 1 ;
-      int sortedHeight = (height + (padTop+padBottom) - sortHeight)/strideY + 1 ;
-      int sortedVolume = sortedWidth * sortedHeight * depth ;
-
-      sorting_average_kernel<type>
-      <<< divideAndRoundUp(sortedVolume, VL_CUDA_NUM_THREADS), VL_CUDA_NUM_THREADS >>>
-      (sorted, data,
-       sortedHeight, sortedWidth, sortedVolume,
-       height, width,
-       sortHeight, sortWidth,
-       strideY, strideX,
-       padTop, padLeft);
-
-      cudaError_t status = cudaPeekAtLastError() ;
-      return (status == cudaSuccess) ? vl::VLE_Success : vl::VLE_Cuda ;
-    }
-
-    static vl::ErrorCode
-    backward(type* derData,
-             type const* derSorted,
-             size_t height, size_t width, size_t depth,
-             size_t sortHeight, size_t sortWidth,
-             size_t strideY, size_t strideX,
-             size_t padTop, size_t padBottom,
-             size_t padLeft, size_t padRight)
-    {
-      int sortedWidth = (width + (padLeft+padRight) - sortWidth)/strideX + 1 ;
-      int sortedHeight = (height + (padTop+padBottom) - sortHeight)/strideY + 1 ;
-      int dataVolume = width * height * depth ;
-
-      sorting_average_backward_kernel<type>
-      <<< divideAndRoundUp(dataVolume, VL_CUDA_NUM_THREADS), VL_CUDA_NUM_THREADS >>>
-      (derData, derSorted,
-       dataVolume,
-       sortedHeight, sortedWidth,
-       height, width, dataVolume,
-       sortHeight, sortWidth,
-       strideY, strideX,
-       padTop, padLeft);
-
-      cudaError_t status = cudaPeekAtLastError() ;
-      return (status == cudaSuccess) ? vl::VLE_Success : vl::VLE_Cuda ;
-    }
-  } ; // sorting_average
+ 
 
 } } ; // namespace vl::impl
 
 // Instantiations
 template struct vl::impl::sorting_max<vl::VLDT_GPU, float> ;
-template struct vl::impl::sorting_average<vl::VLDT_GPU, float> ;
 
 #ifdef ENABLE_DOUBLE
 template struct vl::impl::sorting_max<vl::VLDT_GPU, double> ;
-template struct vl::impl::sorting_average<vl::VLDT_GPU, double> ;
 #endif
 
