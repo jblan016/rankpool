@@ -82,51 +82,7 @@ sorting_kernel
 /*                                             sorting_max_backward */
 /* ---------------------------------------------------------------- */
 
-#ifdef VLNN_CAFFELIKE_BPSORT
-// In order to be able to use this, BP would need to have access to both
-// bottom data and sorted data (currently only passed bottom data...)
-template <typename T> __global__ void
-sorting_max_backward_with_sorted_data
-(T* derData,
- const T* data,
- const T* sorted,
- const T* derSorted,
- const int nthreads,
- const int sortedWidth,
- const int sortedHeight,
- const int width,
- const int height,
- const int depth,
- const int sortWidth,
- const int sortHeight,
- const int strideX,
- const int strideY)
-{
-  int index = blockIdx.x * blockDim.x + threadIdx.x;
-  if (index < nthreads) {
-    // find out the local index
-    // find out the local offset
-    int x = index % width;
-    int y = (index / width) % height;
-    int z = (index / width / height) % depth;
-    int py1 = (y < sortHeight) ? 0 : (y - sortHeight) / strideY + 1;
-    int py2 = min(y / strideY + 1, sortedHeight);
-    int px1 = (x < sortWidth) ? 0 : (x - sortWidth) / strideX + 1;
-    int px2 = min(x / strideX + 1, sortedWidth);
-    T gradient = 0;
-    T datum = data[(z * height + y) * width + x];
-    sorted += z * sortedHeight * sortedWidth;
-    dzdy += z * sortedHeight * sortedWidth;
-    for (int py = py1; py < py2; ++py) {
-      for (int px = px1; px < px2; ++px) {
-        gradient += dzdy[py * sortedWidth + px] *
-        (datum == sorted[py * sortedWidth + px]);
-      }
-    }
-    dzdx[index] = gradient;//where is derData, and derSorted??? assume wrong for now
-  }
-}
-#endif
+
 
 #if !defined(__CUDA_ARCH__) || __CUDA_ARCH__ >= 600
 #else
