@@ -14,6 +14,7 @@ the terms of the BSD license (see the COPYING file).
 
 #include "sorting.hpp"
 #include "../datacu.hpp"
+#include "sharedmem.cuh"
 #include <assert.h>
 #include <float.h>
 #include <sm_20_atomic_functions.h>
@@ -179,23 +180,29 @@ namespace vl { namespace impl {
     forward(type* sorted,
             type const* data,
             size_t height, size_t width, size_t depth,
-            size_t sortHeight, size_t sortWidth,
-            size_t strideY, size_t strideX,
-            size_t padTop, size_t padBottom,
-            size_t padLeft, size_t padRight)
+            size_t windowHeight, size_t windowWidth,
+            size_t strideHeight, size_t strideWidth)
     {
-      int sortedWidth = (width + (padLeft+padRight) - sortWidth)/strideX + 1 ;
-      int sortedHeight = (height + (padTop+padBottom) - sortHeight)/strideY + 1 ;
-      int sortedVolume = sortedWidth * sortedHeight * depth ;
-
+      int sortedWidth = (width - windowWidth)/strideWidth + 1 ;
+      int sortedHeight = (height - windowHeight)/strideHeight + 1 ;
+      
+/*
+(T* sorted,
+ const T* data,
+ const int Height,
+ const int windowWidth,
+ const int windowHeight,
+ const int strideWidth,
+ const int strideHeight,
+ const int BoxesInHeight
+ )
+*/
       sorting_max_kernel<type>
       <<< divideAndRoundUp(sortedVolume, VL_CUDA_NUM_THREADS), VL_CUDA_NUM_THREADS >>>
       (sorted, data,
-       sortedHeight, sortedWidth, sortedVolume,
-       height, width,
-       sortHeight, sortWidth,
-       strideY, strideX,
-       padTop, padLeft);
+       height,
+       windowWidth, windowHeight,
+       strideWidth, strideHeight);
 
       cudaError_t status = cudaPeekAtLastError() ;
       return (status == cudaSuccess) ? vl::VLE_Success : vl::VLE_Cuda ;
@@ -206,22 +213,25 @@ namespace vl { namespace impl {
              type const* data,
              type const* derOutput,
              size_t height, size_t width, size_t depth,
-             size_t sortHeight, size_t sortWidth,
-             size_t strideY, size_t strideX,
+             size_t windowHeight, size_t windowWidth,
+             size_t strideHeight, size_t strideWidth,
              size_t padTop, size_t padBottom,
              size_t padLeft, size_t padRight)
     {
-      int sortedWidth = (width + (padLeft+padRight) - sortWidth)/strideX + 1 ;
-      int sortedHeight = (height + (padTop+padBottom) - sortHeight)/strideY + 1 ;
+      int boxesInWidth = (width  - windowWidth)/strideWidth + 1 ;
+      int boxesInHeight = (height  - windowHeight)/strideHeight + 1 ;
+      int boxesInPlane = boxesInWidth * boxesInHeight;
       int sortedVolume = sortedWidth * sortedHeight * depth ;
-
+      int numThreadPerArray = windowWidth * windowHeight ;
+      dim3 dimBlock(numThreadPerArray,1);
+    	dim3 dimGrid(boxesInPlane,depth);
       sorting_max_backward_kernel<type>
       <<< divideAndRoundUp(sortedVolume, VL_CUDA_NUM_THREADS), VL_CUDA_NUM_THREADS >>>
       (derData, data, derOutput,
        sortedHeight, sortedWidth, sortedVolume,
        height, width,
-       sortHeight, sortWidth,
-       strideY, strideX,
+       windowHeight, windowWidth,
+       strideHeight, strideWidth,
        padTop, padLeft);
 
       cudaError_t status = cudaPeekAtLastError() ;
