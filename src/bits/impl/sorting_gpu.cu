@@ -33,7 +33,7 @@ sorting_kernel
  const int windowHeight,
  const int strideWidth,
  const int strideHeight,
- const int BoxesInWidth
+ const int BoxesInHeight
  )
 {
 	const int numElemsPerArray = BLOCK_THREADS * ITEMS_PER_THREAD;
@@ -46,9 +46,9 @@ sorting_kernel
     __shared__ typename BlockRadixSortT::TempStorage temp_storage;
 // section d_in->d_out
     int offsetk= blockIdx.y*gridDim.x*numElemsPerArray;
-    int offsetj=blockIdx.x/BoxesInWidth;
+    int offsetj=blockIdx.x/BoxesInHeight;
     offsetj=offsetj*strideWidth;
-    int offseti=blockIdx.x%BoxesInWidth;
+    int offseti=blockIdx.x%BoxesInHeight;
         offseti=offseti*strideHeight;
 //
     int block_offset = numElemsPerArray * blockIdx.x+offsetk;
@@ -101,61 +101,68 @@ static __device__ double atomicAdd(double* address, double val)
 }
 #endif
 
-template<typename T> __global__ void
+template<typename T, int BLOCK_THREADS, int ITEMS_PER_THREAD> __global__ void
 sorting_max_backward_kernel
 (T* derData,
  const T* data,
  const T* derSorted,
- const int sortedWidth,
- const int sortedHeight,
- const int sortedVolume,
- const int width,
- const int height,
- const int sortWidth,
- const int sortHeight,
- const int strideX,
- const int strideY,
- const int padLeft,
- const int padTop)
+ const int Height,
+ const int windowWidth,
+ const int windowHeight,
+ const int strideWidth,
+ const int strideHeight,
+ const int BoxesInHeight
+ )
 {
-  int sortedIndex = threadIdx.x + blockIdx.x * blockDim.x;
-  if (sortedIndex < sortedVolume) {
-    int px = sortedIndex ;
-    int py = px / sortedWidth ;
-    int pz = py / sortedHeight ;
-    px %= sortedWidth ;
-    py %= sortedHeight ;
-    data += pz * (width*height) ;
-    derData += pz * (width*height) ;
+	const int numElemsPerArray = BLOCK_THREADS * ITEMS_PER_THREAD;
+	
+	// --- Shared memory allocation
+	__shared__ T sharedMemoryValueArray[numElemsPerArray];
+	__shared__ int sharedMemoryRanks[numElemsPerArray];
+    // --- Specialize BlockStore and BlockRadixSort collective types
+    typedef cub::BlockRadixSort <int , BLOCK_THREADS, ITEMS_PER_THREAD, int> BlockRadixSortT; //led dernier argument est pour le rang
 
-    int x1 = px * strideX - padLeft ;
-    int y1 = py * strideY - padTop ;
-    int x2 = min(x1 + sortWidth, width) ;
-    int y2 = min(y1 + sortHeight, height) ;
-    x1 = max(x1, 0) ;
-    y1 = max(y1, 0) ;
-
-    int bestIndex = y1 * width + x1 ;
-    T bestValue = data[bestIndex] ;
-    for (int y = y1 ; y < y2 ; ++y) {
-      for (int x = x1 ; x < x2 ; ++x) {
-        int index = y * width + x ;
-        T value = data[index] ;
-        if (value > bestValue) {
-          bestValue = value ;
-          bestIndex = index ;
-        }
-      }
+    // --- Allocate type-safe, repurposable shared memory for collectives
+    __shared__ typename BlockRadixSortT::TempStorage temp_storage;
+// section d_in->d_out
+    int offsetk= blockIdx.y*gridDim.x*numElemsPerArray;
+    int offsetj=blockIdx.x/BoxesInHeight;
+    offsetj=offsetj*strideWidth;
+    int offseti=blockIdx.x%BoxesInHeight;
+        offseti=offseti*strideHeight;
+//
+    int block_offset = numElemsPerArray * blockIdx.x+offsetk;
+    int arrayAddress = 0;
+    int windowoffsetj = 0;
+    int Index = 0;
+    // --- Load data to shared memory
+    for (int k = 0; k < ITEMS_PER_THREAD; k++){
+    	arrayAddress = threadIdx.x * ITEMS_PER_THREAD + k;
+    	windowoffsetj=(arrayAddress/windowHeight + offsetj) * Height;
+    	Index = arrayAddress%windowHeight+windowoffsetj+offseti+offsetk;
+    	sharedMemoryValueArray[arrayAddress]  = d_in[Index];//loads array
+    	sharedMemoryRanks[arrayAddress]  = Index;
     }
-    /*
-     This is bad(why the following?), but required to eliminate a race condition when writing
-     to bottom_diff.
-     Caffe goes the other way around, but requrires remembering the layer
-     output, or the maximal indexes.
-     atomicAdd(add, val)
-     */
-    atomicAdd(derData + bestIndex, derSorted[sortedIndex]) ;
-  }
+    __syncthreads();
+
+    // --- Collectively sort the keys
+    BlockRadixSortT(temp_storage).Sort(*static_cast<T(*)[ITEMS_PER_THREAD]>(static_cast<void*>(sharedMemoryValueArray + (threadIdx.x * ITEMS_PER_THREAD))),
+            *static_cast<int(*)[ITEMS_PER_THREAD]>(static_cast<void*>(sharedMemoryRanks + (threadIdx.x * ITEMS_PER_THREAD))));
+
+
+    __syncthreads();
+
+    // --- Write data from shared memory
+    for (int k = 0; k < ITEMS_PER_THREAD; k++){
+    	arrayAddress = threadIdx.x * ITEMS_PER_THREAD + k;
+    	windowoffsetj=(arrayAddress/windowHeight + offsetj) * Height;
+    	Index = block_offset + arrayAddress;
+    	//d_out[Index] = sharedMemoryValueArray[arrayAddress];
+    	//d_r_out[Index] = sharedMemoryRanks[arrayAddress];
+    	atomicAdd(derData + sharedMemoryRanks[arrayAddress], derSorted[Index]) ;
+    }
+    
+    
 }
 
 
