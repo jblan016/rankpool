@@ -27,7 +27,6 @@ template<typename T, int BLOCK_THREADS, int ITEMS_PER_THREAD> __global__ void
 sorting_kernel
 (T* sorted,
  const T* data,
- const int Width,
  const int Height,
  const int windowWidth,
  const int windowHeight,
@@ -145,7 +144,7 @@ sorting_max_backward_kernel
     }
     __syncthreads();
 
-    // --- Collectively sort the keys
+    // --- Collectively sort the pairs (value,rank)_i
     BlockRadixSortT(temp_storage).Sort(*static_cast<T(*)[ITEMS_PER_THREAD]>(static_cast<void*>(sharedMemoryValueArray + (threadIdx.x * ITEMS_PER_THREAD))),
             *static_cast<int(*)[ITEMS_PER_THREAD]>(static_cast<void*>(sharedMemoryRanks + (threadIdx.x * ITEMS_PER_THREAD))));
 
