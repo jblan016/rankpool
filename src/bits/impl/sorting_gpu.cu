@@ -124,13 +124,12 @@ sorting_max_backward_kernel
 
     // --- Allocate type-safe, repurposable shared memory for collectives
     __shared__ typename BlockRadixSortT::TempStorage temp_storage;
-// section d_in->d_out
     int offsetk= blockIdx.y*gridDim.x*numElemsPerArray;
     int offsetj=blockIdx.x/BoxesInHeight;
     offsetj=offsetj*strideWidth;
     int offseti=blockIdx.x%BoxesInHeight;
         offseti=offseti*strideHeight;
-//
+
     int block_offset = numElemsPerArray * blockIdx.x+offsetk;
     int arrayAddress = 0;
     int windowoffsetj = 0;
@@ -140,7 +139,7 @@ sorting_max_backward_kernel
     	arrayAddress = threadIdx.x * ITEMS_PER_THREAD + k;
     	windowoffsetj=(arrayAddress/windowHeight + offsetj) * Height;
     	Index = arrayAddress%windowHeight+windowoffsetj+offseti+offsetk;
-    	sharedMemoryValueArray[arrayAddress]  = d_in[Index];//loads array
+    	sharedMemoryValueArray[arrayAddress]  = data[Index];//loads array
     	sharedMemoryRanks[arrayAddress]  = Index;
     }
     __syncthreads();
@@ -183,8 +182,9 @@ namespace vl { namespace impl {
             size_t windowHeight, size_t windowWidth,
             size_t strideHeight, size_t strideWidth)
     {
-      int sortedWidth = (width - windowWidth)/strideWidth + 1 ;
-      int sortedHeight = (height - windowHeight)/strideHeight + 1 ;
+      int BoxesInWidth = (width - windowWidth)/strideWidth + 1 ;
+      int BoxesInHeight = (height - windowHeight)/strideHeight + 1 ;
+      int numThreadPerArray = numElemsPerArray;//int numThreadPerArray = numElemsPerArray / numElemsPerThread;
       
 /*
 (T* sorted,
@@ -197,12 +197,12 @@ namespace vl { namespace impl {
  const int BoxesInHeight
  )
 */
-      sorting_max_kernel<type>
+      sorting_max_kernel<type, numThreadPerArray, numElemsPerThread>
       <<< divideAndRoundUp(sortedVolume, VL_CUDA_NUM_THREADS), VL_CUDA_NUM_THREADS >>>
       (sorted, data,
        height,
        windowWidth, windowHeight,
-       strideWidth, strideHeight);
+       strideWidth, strideHeight,BoxesInHeight);
 
       cudaError_t status = cudaPeekAtLastError() ;
       return (status == cudaSuccess) ? vl::VLE_Success : vl::VLE_Cuda ;
@@ -214,26 +214,35 @@ namespace vl { namespace impl {
              type const* derOutput,
              size_t height, size_t width, size_t depth,
              size_t windowHeight, size_t windowWidth,
-             size_t strideHeight, size_t strideWidth,
-             size_t padTop, size_t padBottom,
-             size_t padLeft, size_t padRight)
+             size_t strideHeight, size_t strideWidth)
     {
       int boxesInWidth = (width  - windowWidth)/strideWidth + 1 ;
       int boxesInHeight = (height  - windowHeight)/strideHeight + 1 ;
       int boxesInPlane = boxesInWidth * boxesInHeight;
-      int sortedVolume = sortedWidth * sortedHeight * depth ;
+ 
       int numThreadPerArray = windowWidth * windowHeight ;
       dim3 dimBlock(numThreadPerArray,1);
     	dim3 dimGrid(boxesInPlane,depth);
       sorting_max_backward_kernel<type>
       <<< divideAndRoundUp(sortedVolume, VL_CUDA_NUM_THREADS), VL_CUDA_NUM_THREADS >>>
       (derData, data, derOutput,
-       sortedHeight, sortedWidth, sortedVolume,
+       windowHeight, windowWidth,
        height, width,
        windowHeight, windowWidth,
        strideHeight, strideWidth,
        padTop, padLeft);
-
+/*
+(T* derData,
+ const T* data,
+ const T* derSorted,
+ const int Height,
+ const int windowWidth,
+ const int windowHeight,
+ const int strideWidth,
+ const int strideHeight,
+ const int BoxesInHeight
+ )
+*/
       cudaError_t status = cudaPeekAtLastError() ;
       return (status == cudaSuccess) ? vl::VLE_Success : vl::VLE_Cuda ;
     }
